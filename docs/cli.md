@@ -84,10 +84,10 @@ corruption the lease prevents. There is deliberately no API endpoint for it.
 
 ## `camoufox-pm fetch`
 
-Downloads the Camoufox browser without needing Camoufox's own command line. This
-is what the standalone desktop build has to use: that build carries the
-installer, but there is no `camoufox` executable beside it, and often no Python
-on the machine at all.
+Downloads the Camoufox browser without needing Camoufox's own command line. The
+standalone desktop build ships a browser already, so this is how you replace it
+there: the build carries the installer but has no `camoufox` executable beside
+it, and often no Python on the machine at all.
 
 ```bash
 camoufox-pm fetch               # current stable build
@@ -101,7 +101,8 @@ it does nothing until `--force` is passed.
 
 In the desktop build everything the app writes — the browser, the GeoIP
 databases, the addons, and `data/profiles.db` — stays inside the folder you
-unzipped, so deleting that folder is a complete uninstall.
+unzipped, so deleting that folder is a complete uninstall. That build ships with
+a browser already, so `fetch` is only how you replace it with a newer one.
 
 ## `camoufox fetch`
 

@@ -71,6 +71,16 @@ jobs:
       - name: Build the desktop app
         run: uv run python scripts/build_desktop.py
 
+      # The browser is far too large for the PyInstaller bundle, but the point of
+      # this build is to be unzipped and run. Install it into the package's own
+      # cache directory — the one launch.py points at — so the folder ships
+      # complete. `fetch` stays available for updating it later.
+      - name: Install the browser into the package
+        shell: pwsh
+        env:
+          WIN_PD_OVERRIDE_LOCAL_APPDATA: ${{ github.workspace }}\dist\camoufox-pm\portable
+        run: uv run camoufox-pm fetch
+
       - name: Package
         id: package
         shell: pwsh
@@ -136,14 +146,13 @@ jobs:
             | Commit | ${{ github.sha }} |
             | SHA256 | ${{ steps.package.outputs.sha256 }} |
 
-            **First run — three steps:**
+            **First run — two steps:**
 
             1. Download `camoufox-pm-windows-x64.zip` and unzip the whole archive.
                Keep the folder intact: `camoufox-pm.exe` needs the `_internal/`
                directory beside it.
-            2. From inside that folder, download the browser once with
-               `camoufox-pm.exe fetch` (~470 MB — it is not bundled).
-            3. Start `camoufox-pm.exe`.
+            2. Start `camoufox-pm.exe`. The browser is already inside; when a newer
+               one comes out, `camoufox-pm.exe fetch --force` replaces it.
 
             Everything the app writes stays inside the unzipped folder — the
             browser, the GeoIP databases, the addons, and `data/profiles.db` — so
