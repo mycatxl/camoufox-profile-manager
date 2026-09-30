@@ -101,14 +101,15 @@ jobs:
           $exe = "dist/camoufox-pm/camoufox-pm.exe"
           if (-not (Test-Path $exe)) { throw "PyInstaller produced no $exe" }
 
-          # The build is windowed so double-clicking does not open a terminal.
-          # PE subsystem 2 is GUI, 3 is console — worth asserting because the
-          # difference is invisible to every other check here and only shows up
-          # when a person runs the thing.
+          # PE subsystem 3 is console, 2 is GUI. The console is deliberate: on
+          # Windows that window is the only visible handle on a running server, so
+          # it is also how the app gets stopped. Asserted because the difference is
+          # invisible to every other check here and only shows up when a person runs
+          # the thing — a windowed build leaves a process nobody can find.
           $pe = [System.IO.File]::ReadAllBytes($exe)
           $subsystem = [System.BitConverter]::ToUInt16($pe, [System.BitConverter]::ToInt32($pe, 0x3C) + 0x5C)
-          if ($subsystem -ne 2) { throw "$exe has PE subsystem $subsystem; expected 2 (GUI, no console window)" }
-          Write-Host "Verified: $exe is a GUI binary, so no console window appears"
+          if ($subsystem -ne 3) { throw "$exe has PE subsystem $subsystem; expected 3 (console window — the handle you close to stop the app)" }
+          Write-Host "Verified: $exe is a console binary, so closing its window stops the app"
 
           $zip = "dist/camoufox-pm-$version-windows-x64.zip"
           # The package promises to be "unzip and run", so the parts that make

@@ -110,11 +110,12 @@ The browser binary keeps one directory of its own,
 `SkeletonUILock-*` there and deletes it again on exit. A leftover from a crash is
 cleared at the next start.
 
-The Windows build is windowed, so no terminal window opens next to it. Output
-goes to the console it was started from when there is one — run
-`camoufox-pm.exe fetch` in a terminal and the progress prints there — and
-otherwise to `logs\camoufox-pm.log` beside the executable, which is also where a
-start that fails says why.
+The Windows build keeps its console window: on Windows that window is the only
+visible handle on a running server, so closing it is how the app is stopped.
+(`camoufox-pm --desktop` is the other way — that one exits when you close its
+window.) A build without a console has no stdout at all; such a build attaches to
+whatever console started it, or writes `logs\camoufox-pm.log` beside the
+executable.
 
 ## `camoufox fetch`
 

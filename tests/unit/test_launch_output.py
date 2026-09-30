@@ -1,10 +1,11 @@
-"""Where a consoleless Windows build sends its output.
+"""Where a consoleless build sends its output.
 
-The desktop build is windowed (``console=False`` in the spec), so the frozen
-process starts with ``sys.stdout`` and ``sys.stderr`` set to None. ``launch.py``
-either borrows the console it was started from or opens a log file inside the
-package folder. Without one of the two, loguru's default handler breaks on the
-first log line — which is exactly why the build used to keep a console window.
+The Windows build ships with a console (``console=True`` in the spec): that window
+is the only visible handle on a running server, so closing it is how the app is
+stopped. A build without one starts with ``sys.stdout`` and ``sys.stderr`` set to
+None, and then ``launch.py`` either borrows the console it was started from or
+opens a log file inside the package folder. Without one of the two, loguru's
+default handler breaks on the first log line.
 
 Loaded by path, because ``packaging`` is also the name of a real distribution.
 """

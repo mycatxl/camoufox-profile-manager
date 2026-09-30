@@ -7,7 +7,6 @@
 # The browser, the GeoIP databases and the addons are not part of this bundle;
 # the Windows build installs them into the package directory afterwards.
 import os
-import sys
 
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 
@@ -47,14 +46,13 @@ exe = EXE(
     [],
     exclude_binaries=True,
     name="camoufox-pm",
-    # No console window: this is the desktop app, and a black terminal sitting
-    # next to it is the first thing anyone asks about. The price is that a frozen
-    # build has no stdout or stderr, which launch.py pays back by attaching to the
-    # console it was started from (so `camoufox-pm fetch` still prints there) and
-    # writing logs/camoufox-pm.log instead when it was double-clicked.
-    # Left alone elsewhere: on macOS this only changes whether the bundle opens a
-    # Terminal window, and nothing has been verified against that.
-    console=sys.platform != "win32",
+    # Deliberate: the same binary is also the CLI, and on Windows this console is
+    # the only visible handle on a running server — closing it stops the app. A
+    # windowed build has no stdout or stderr at all, and then closing the web UI or
+    # its browser tab leaves the process running with nothing left to close, which
+    # is worse than a black window. launch.py still keeps _redirect_output for a
+    # build without a console; nothing uses it today.
+    console=True,
 )
 coll = COLLECT(
     exe,

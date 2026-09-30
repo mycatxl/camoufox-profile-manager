@@ -9,10 +9,11 @@ changes none of that; :func:`_anchor` only acts inside a bundle.
 The browser binary keeps one directory of its own outside the folder, which no
 Python-level switch can move; :func:`_clear_browser_leftovers` clears it.
 
-The Windows build has no console, which is what keeps a terminal window from
-opening beside the desktop app. Output therefore goes to the console this process
-was started from when there is one, and otherwise into ``logs/camoufox-pm.log``
-beside the executable, so a start that fails is still diagnosable.
+The Windows build keeps its console: on Windows that window is the only visible
+handle on a running server, so closing it is how the app is stopped. A build
+without one has no stdout or stderr at all, which is what _redirect_output
+covers — it attaches to the console it was started from, or writes
+``logs/camoufox-pm.log`` beside the executable.
 """
 
 import io
@@ -23,9 +24,9 @@ from pathlib import Path
 
 PORTABLE_CACHE_DIRNAME = "portable"
 
-# A windowed build on Windows has no stdout or stderr at all (see the spec), so
-# _redirect_output gives the process one of two places to write: the console it
-# was started from, or this file inside the package folder.
+# A build without a console has no stdout or stderr at all, so _redirect_output
+# gives the process one of two places to write: the console it was started from,
+# or this file inside the package folder. Dormant while a stream exists.
 LOG_DIRNAME = "logs"
 LOG_FILENAME = "camoufox-pm.log"
 LOG_ROTATE_BYTES = 5 * 1024 * 1024
@@ -36,7 +37,7 @@ _ATTACH_PARENT_PROCESS = 0xFFFFFFFF
 def _attach_parent_console() -> bool:
     """Borrow the console of the process that started us, if there is one.
 
-    A windowed Windows build is not attached to any console, so `camoufox-pm
+    A build without a console is not attached to any console, so `camoufox-pm
     fetch` run from a terminal would print nothing at all. Attaching puts that
     output back. False means there was no console to borrow — a double-click —
     and the caller falls back to a log file.
@@ -168,8 +169,9 @@ def _anchor() -> None:
     # setdefault, so an override the user set deliberately still wins.
     os.environ.setdefault("WIN_PD_OVERRIDE_LOCAL_APPDATA", str(root / PORTABLE_CACHE_DIRNAME))
 
-    # A windowed build has no console at all. Give the process somewhere to
-    # write before anything imports loguru, whose default handler needs a stream.
+    # A build without a console has nowhere to write, and loguru's default handler
+    # needs a stream before anything logs. Windows ships with a console, so this is
+    # a no-op there today; it is what keeps a windowed build diagnosable.
     _redirect_output(root)
 
     # The browser binary has one directory of its own that no environment
