@@ -143,6 +143,30 @@ def _fill_app_version(pin: dict[str, Any]) -> None:
         pin["navigator.appVersion"] = derived
 
 
+def _camou_config(env: dict[str, Any]) -> str:
+    """Reassemble the ``CAMOU_CONFIG_<n>`` chunks into one JSON document.
+
+    Camoufox splits the config across numbered variables to stay under the
+    per-variable limit — 2047 characters on Windows, 32767 elsewhere — so the
+    first chunk is a fragment, not the beginning of a complete document. Parsing
+    it alone truncates the JSON, which fails for any fingerprint bigger than one
+    chunk: on Windows, most of them. Camoufox reassembles them the same way in
+    ``utils.spoofs_window_dimensions``.
+
+    Raises ``KeyError`` when there is no chunk at all; the caller already treats
+    that as "cannot pin".
+    """
+    chunks = [
+        (int(name.rsplit("_", 1)[1]), value)
+        for name, value in env.items()
+        if name.startswith("CAMOU_CONFIG_")
+    ]
+    if not chunks:
+        raise KeyError("CAMOU_CONFIG_1")
+    # By number, not by name: CAMOU_CONFIG_10 sorts before CAMOU_CONFIG_2.
+    return "".join(value for _, value in sorted(chunks))
+
+
 def resolve(launch_options: dict[str, Any], preset: dict[str, Any] | None = None) -> dict[str, Any]:
     """Ask Camoufox to resolve a full fingerprint for these launch constraints.
 
@@ -179,7 +203,7 @@ def resolve(launch_options: dict[str, Any], preset: dict[str, Any] | None = None
 
     try:
         resolved = camoufox_launch_options(**constraints)
-        config = json.loads(resolved["env"]["CAMOU_CONFIG_1"])
+        config = json.loads(_camou_config(resolved["env"]))
     except Exception as exc:  # noqa: BLE001 - never block a launch over this
         logger.warning(f"Could not resolve a fingerprint to pin: {exc}")
         return {}

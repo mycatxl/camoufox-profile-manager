@@ -1,5 +1,7 @@
 """What gets frozen into a profile's identity, and what must stay dynamic."""
 
+import json
+
 import pytest
 
 from camoufox_pm.core import fingerprint_store
@@ -344,3 +346,60 @@ class TestAppVersion:
         fingerprint_store._fill_app_version(pin)
 
         assert "navigator.appVersion" not in pin
+
+
+# --- Reassembling the config camoufox chunks ---------------------------------
+
+
+def test_camou_config_joins_every_chunk():
+    """Camoufox splits the fingerprint across CAMOU_CONFIG_<n> to stay under the
+    per-variable limit, so the first chunk alone is a truncated document. On
+    Windows that limit is 2047 characters, which most fingerprints exceed."""
+    blob = json.dumps({"fonts": ["Arial"] * 500})
+
+    joined = fingerprint_store._camou_config(
+        {
+            "CAMOU_CONFIG_1": blob[:2047],
+            "CAMOU_CONFIG_2": blob[2047:4094],
+            "CAMOU_CONFIG_3": blob[4094:],
+            "UNRELATED": "not part of the config",
+        }
+    )
+
+    assert json.loads(joined) == {"fonts": ["Arial"] * 500}
+
+
+def test_camou_config_orders_chunks_by_number_not_by_name():
+    """CAMOU_CONFIG_10 must not be spliced in ahead of CAMOU_CONFIG_2."""
+    joined = fingerprint_store._camou_config(
+        {"CAMOU_CONFIG_1": "a", "CAMOU_CONFIG_2": "b", "CAMOU_CONFIG_10": "c"}
+    )
+
+    assert joined == "abc"
+
+
+def test_camou_config_raises_when_there_is_nothing_to_join():
+    """resolve() catches this and leaves the profile unpinned, which is the
+    documented behaviour when camoufox has no config to offer."""
+    with pytest.raises(KeyError):
+        fingerprint_store._camou_config({"UNRELATED": "x"})
+
+
+def test_resolve_reassembles_a_chunked_fingerprint(monkeypatch):
+    """The regression: reading only CAMOU_CONFIG_1 truncated the document, so
+    pinning failed for every fingerprint bigger than one chunk — which on
+    Windows, at a 2047-character limit, is nearly all of them."""
+    from camoufox import utils
+
+    blob = json.dumps({**RESOLVED, "fonts": ["Arial"] * 400})
+    assert len(blob) > 2047, "the config has to actually split for this to test anything"
+
+    def fake_launch_options(**_):
+        return {"env": {"CAMOU_CONFIG_1": blob[:2047], "CAMOU_CONFIG_2": blob[2047:]}}
+
+    monkeypatch.setattr(utils, "launch_options", fake_launch_options)
+
+    pinned = fingerprint_store.resolve({"navigator.hardwareConcurrency": 8})
+
+    assert pinned["navigator.hardwareConcurrency"] == 8
+    assert "geolocation:latitude" not in pinned, "location follows the proxy, not the pin"
