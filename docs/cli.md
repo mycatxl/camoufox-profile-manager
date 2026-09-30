@@ -101,11 +101,14 @@ it does nothing until `--force` is passed.
 
 In the desktop build everything the app writes — the browser, the GeoIP
 databases, the addons, and `data/profiles.db` — stays inside the folder you
-unzipped, so deleting that folder is a complete uninstall. The only trace
-outside it is the empty `%LOCALAPPDATA%\camoufox\camoufox\` directory: the
-browser binary creates it for a startup lock file, then deletes the lock again
-when it exits. That build ships with a browser already, so `fetch` is only how
-you replace it with a newer one.
+unzipped, so deleting that folder is a complete uninstall. That build ships with
+all of it already, so the first launch needs no network, and `fetch` is only how
+you replace the browser with a newer one.
+
+The browser binary keeps one directory of its own,
+`%LOCALAPPDATA%\Camoufox\Camoufox\`: it is compiled to write a zero-byte
+`SkeletonUILock-*` there and deletes it again on exit. A leftover from a crash is
+cleared at the next start.
 
 ## `camoufox fetch`
 

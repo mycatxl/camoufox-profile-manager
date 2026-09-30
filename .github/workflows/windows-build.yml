@@ -6,27 +6,23 @@ name: Windows build
 # Every push to main produces two things:
 #   1. an Actions artifact named with the version + commit — traceability, kept
 #      90 days;
-#   2. the rolling release `latest-win`, whose single asset keeps a *stable*
-#      filename, so its download URL never changes.
+#   2. the release `latest-win`, this repository's single download: one asset, a
+#      stable filename, so its URL never changes.
 #
 # Windows only on purpose: `desktop.yml` keeps the manual, cross-platform builds
 # (macOS/Windows/Linux). PyInstaller does not cross-compile, so the Windows
 # bundle needs a windows-latest runner — and nothing else is wanted here.
 #
-#
-# The Camoufox browser binary is not part of the PyInstaller bundle; it is
-# installed into the package directory in its own step below, so the zip is
-# complete the moment it is unzipped.
+# The browser, the GeoIP databases and the addons are not part of the PyInstaller
+# bundle; they are installed into the package directory in their own step below,
+# so the zip is complete the moment it is unzipped.
 
 on:
   push:
     branches: [main]
+  # A manual rebuild of the same thing, for when a run failed for reasons that
+  # had nothing to do with the commit.
   workflow_dispatch:
-    inputs:
-      release_tag:
-        description: "Also attach the zip to this release tag (optional)"
-        required: false
-        default: ""
 
 # One build per ref: a newer push supersedes an in-flight build.
 concurrency:
@@ -75,14 +71,17 @@ jobs:
         run: uv run python scripts/build_desktop.py
 
       # The browser is far too large for the PyInstaller bundle, but the point of
-      # this build is to be unzipped and run. Install it into the package's own
-      # cache directory — the one launch.py points at — so the folder ships
-      # complete. `fetch` stays available for updating it later.
-      - name: Install the browser into the package
+      # this build is to be unzipped and run. Install it, the GeoIP databases and
+      # the default addons into the package's own cache directory — the one
+      # launch.py points at — so the folder ships complete and the first launch
+      # needs no network at all.
+      - name: Install the browser and its data into the package
         shell: pwsh
         env:
           WIN_PD_OVERRIDE_LOCAL_APPDATA: ${{ github.workspace }}\dist\camoufox-pm\portable
-        run: uv run camoufox-pm fetch
+        run: |
+          uv run camoufox-pm fetch
+          uv run python packaging/prefetch_data.py
 
       - name: Package
         id: package
@@ -137,73 +136,32 @@ jobs:
         with:
           tag_name: latest-win
           name: Latest Windows build (rolling)
-          # Keep the "Latest" badge on the versioned releases; this one is a
-          # moving target, not a published version.
-          make_latest: false
+          # This repository publishes exactly one release, so it carries the
+          # "Latest" badge.
+          make_latest: true
           body: |
-            Rolling build of the newest `main`. The asset below is overwritten on
-            every push, and its filename never changes — so this link is stable.
+            Windows desktop build of `main`. The asset below is overwritten on
+            every push and its filename never changes, so this link is stable.
+
+            **Unzip and run — nothing to install:**
+
+            1. Download `camoufox-pm-windows-x64.zip` and unzip the whole archive.
+               Keep the folder intact: `camoufox-pm.exe` needs `_internal/` beside it.
+            2. Start `camoufox-pm.exe`.
+
+            The browser, the GeoIP databases and the uBlock Origin addon are all
+            inside, so the first launch needs no network.
+
+            Everything the app writes stays in that folder; deleting it is a
+            complete uninstall.
 
             | | |
             |---|---|
             | Version | ${{ steps.version.outputs.value }} |
             | Commit | ${{ github.sha }} |
-            | SHA256 | ${{ steps.package.outputs.sha256 }} |
-
-            **First run — two steps:**
-
-            1. Download `camoufox-pm-windows-x64.zip` and unzip the whole archive.
-               Keep the folder intact: `camoufox-pm.exe` needs the `_internal/`
-               directory beside it.
-            2. Start `camoufox-pm.exe`. The browser is already inside; when a newer
-               one comes out, `camoufox-pm.exe fetch --force` replaces it.
-
-            Everything the app writes stays inside the unzipped folder — the
-            browser, the GeoIP databases, the addons, and `data/profiles.db` — so
-            deleting that folder is a complete uninstall. The only trace outside
-            it is the empty `%LOCALAPPDATA%\camoufox\camoufox\` directory: the
-            browser binary creates it for a startup lock file, then deletes the
-            lock again when it exits.
+            | Size | ${{ steps.package.outputs.mb }} MB |
+            | SHA256 | `${{ steps.package.outputs.sha256 }}` |
 
             The build is unsigned, so Windows SmartScreen asks once
             ("More info" → "Run anyway").
           files: rolling/*.zip
-
-      # A `release_tag` dispatch refreshes that release in place: the asset name
-      # depends only on the version, so uploading it again replaces the old one.
-      # The body is written here too — a release people land on has to say how to
-      # run what they just downloaded.
-      - name: Attach to release
-        if: ${{ inputs.release_tag != '' }}
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ inputs.release_tag }}
-          name: ${{ inputs.release_tag }}
-          body: |
-            Windows desktop build, version ${{ steps.version.outputs.value }},
-            from commit `${{ github.sha }}`.
-
-            | | |
-            |---|---|
-            | File | `${{ steps.package.outputs.zip }}` |
-            | Size | ${{ steps.package.outputs.mb }} MB |
-            | SHA256 | `${{ steps.package.outputs.sha256 }}` |
-
-            **First run — two steps:**
-
-            1. Download the zip and unzip the whole archive. Keep the folder
-               intact: `camoufox-pm.exe` needs the `_internal/` directory beside
-               it.
-            2. Start `camoufox-pm.exe`. The browser is already inside; when a
-               newer one comes out, `camoufox-pm.exe fetch --force` replaces it.
-
-            Everything the app writes stays inside the unzipped folder — the
-            browser, the GeoIP databases, the addons, and `data/profiles.db` — so
-            deleting that folder is a complete uninstall. The only trace outside
-            it is the empty `%LOCALAPPDATA%\camoufox\camoufox\` directory: the
-            browser binary creates it for a startup lock file, then deletes the
-            lock again when it exits.
-
-            The build is unsigned, so Windows SmartScreen asks once
-            ("More info" → "Run anyway").
-          files: dist/*.zip

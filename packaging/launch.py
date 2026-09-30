@@ -5,6 +5,9 @@ executable, and everything camoufox downloads — the browser, the GeoIP databas
 the addons — all live inside the folder that was unzipped. Deleting that folder
 is therefore a complete uninstall. Running this file from a source checkout
 changes none of that; :func:`_anchor` only acts inside a bundle.
+
+The browser binary keeps one directory of its own outside the folder, which no
+Python-level switch can move; :func:`_clear_browser_leftovers` clears it.
 """
 
 import os
@@ -12,6 +15,54 @@ import sys
 from pathlib import Path
 
 PORTABLE_CACHE_DIRNAME = "portable"
+
+# Firefox's pre-XUL skeleton UI is compiled into the browser's mozglue.dll and
+# writes its lock file to "%LOCALAPPDATA%\<vendor>\<name>" using the names baked
+# in at build time — for this browser, "Camoufox" twice. It runs before XUL
+# exists, so it never consults platformdirs and WIN_PD_OVERRIDE_LOCAL_APPDATA
+# cannot move it. The lock itself is gone by the time the browser exits; this
+# only sweeps up what a crash leaves behind.
+BROWSER_APP_DIRNAME = "Camoufox"
+SKELETON_LOCK_PREFIX = "SkeletonUILock-"
+
+
+def _local_appdata() -> Path | None:
+    """The per-user local app data directory, or None when it is not defined."""
+    value = os.environ.get("LOCALAPPDATA")
+    return Path(value) if value else None
+
+
+def _clear_browser_leftovers(local_appdata: Path | None = None) -> list[Path]:
+    """Remove the browser's own leftovers from outside the package folder.
+
+    Deletes the lock files and then the directories that held them, and nothing
+    else: the whole tree is left alone unless every entry in it is one of those
+    lock files. A real Camoufox install, or the cache an older non-portable
+    build of this app left behind, therefore stays untouched.
+
+    Returns what was removed, which is what the tests assert on.
+    """
+    base = local_appdata if local_appdata is not None else _local_appdata()
+    if base is None:
+        return []
+
+    target = base / BROWSER_APP_DIRNAME / BROWSER_APP_DIRNAME
+    if not target.is_dir():
+        return []
+
+    entries = list(target.iterdir())
+    if any(not (e.is_file() and e.name.startswith(SKELETON_LOCK_PREFIX)) for e in entries):
+        return []
+
+    removed: list[Path] = []
+    for entry in entries:
+        entry.unlink()
+        removed.append(entry)
+    for directory in (target, target.parent):
+        if directory != base and not any(directory.iterdir()):
+            directory.rmdir()
+            removed.append(directory)
+    return removed
 
 
 def _anchor() -> None:
@@ -34,9 +85,16 @@ def _anchor() -> None:
     # a gigabyte of it after a `fetch`. platformdirs honours this override for
     # CSIDL_LOCAL_APPDATA, and every one of those paths goes through it.
     # setdefault, so an override the user set deliberately still wins.
-    os.environ.setdefault(
-        "WIN_PD_OVERRIDE_LOCAL_APPDATA", str(root / PORTABLE_CACHE_DIRNAME)
-    )
+    os.environ.setdefault("WIN_PD_OVERRIDE_LOCAL_APPDATA", str(root / PORTABLE_CACHE_DIRNAME))
+
+    # The browser binary has one directory of its own that no environment
+    # variable reaches, so sweep that one instead.
+    try:
+        _clear_browser_leftovers()
+    except OSError:
+        # A locked file is a reason to leave the folder alone, not to refuse to
+        # start. Whatever survived is cleaned up on the next run.
+        pass
 
 
 def main() -> None:
