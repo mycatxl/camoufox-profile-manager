@@ -13,7 +13,10 @@ name: Windows build
 # (macOS/Windows/Linux). PyInstaller does not cross-compile, so the Windows
 # bundle needs a windows-latest runner — and nothing else is wanted here.
 #
-# The Camoufox browser binary is NOT bundled; it is fetched on first run.
+#
+# The Camoufox browser binary is not part of the PyInstaller bundle; it is
+# installed into the package directory in its own step below, so the zip is
+# complete the moment it is unzipped.
 
 on:
   push:
@@ -98,6 +101,7 @@ jobs:
 
           "zip=$zip" >> $env:GITHUB_OUTPUT
           "sha256=$hash" >> $env:GITHUB_OUTPUT
+          "mb=$mb" >> $env:GITHUB_OUTPUT
 
           @(
             "## Windows desktop build $version",
@@ -162,9 +166,38 @@ jobs:
             ("More info" → "Run anyway").
           files: rolling/*.zip
 
+      # A `release_tag` dispatch refreshes that release in place: the asset name
+      # depends only on the version, so uploading it again replaces the old one.
+      # The body is written here too — a release people land on has to say how to
+      # run what they just downloaded.
       - name: Attach to release
         if: ${{ inputs.release_tag != '' }}
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ inputs.release_tag }}
+          name: ${{ inputs.release_tag }}
+          body: |
+            Windows desktop build, version ${{ steps.version.outputs.value }},
+            from commit `${{ github.sha }}`.
+
+            | | |
+            |---|---|
+            | File | `${{ steps.package.outputs.zip }}` |
+            | Size | ${{ steps.package.outputs.mb }} MB |
+            | SHA256 | `${{ steps.package.outputs.sha256 }}` |
+
+            **First run — two steps:**
+
+            1. Download the zip and unzip the whole archive. Keep the folder
+               intact: `camoufox-pm.exe` needs the `_internal/` directory beside
+               it.
+            2. Start `camoufox-pm.exe`. The browser is already inside; when a
+               newer one comes out, `camoufox-pm.exe fetch --force` replaces it.
+
+            Everything the app writes stays inside the unzipped folder — the
+            browser, the GeoIP databases, the addons, and `data/profiles.db` — so
+            deleting that folder is a complete uninstall.
+
+            The build is unsigned, so Windows SmartScreen asks once
+            ("More info" → "Run anyway").
           files: dist/*.zip
