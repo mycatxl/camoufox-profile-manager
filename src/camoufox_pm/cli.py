@@ -91,6 +91,31 @@ def main() -> None:
         help="List the profiles currently leased, and by whom",
     )
 
+    # The browser is not bundled with the app, and fetching it means running
+    # camoufox's own installer. A frozen build has no `camoufox` command to run
+    # from the outside, so it has to carry the installer itself. Shell-only, like
+    # the user commands: writing hundreds of megabytes is not a button.
+    fetch = subcommands.add_parser(
+        "fetch",
+        help="Download the Camoufox browser (not bundled; a few hundred MB)",
+        description=(
+            "Download and install Camoufox. The browser is distributed separately "
+            "from this app because of its size, so a fresh install has none and "
+            "cannot launch a profile until this has run once. The standalone "
+            "desktop build keeps it inside its own folder."
+        ),
+    )
+    fetch.add_argument(
+        "--force",
+        action="store_true",
+        help="Download a fresh copy even if a browser is already installed",
+    )
+    fetch.add_argument(
+        "--prerelease",
+        action="store_true",
+        help="Allow a prerelease build (newer fingerprints, a much larger download)",
+    )
+
     args = parser.parse_args()
 
     if args.command == "user":
@@ -103,6 +128,10 @@ def main() -> None:
 
     if args.command == "leases":
         asyncio.run(_run_leases_command())
+        return
+
+    if args.command == "fetch":
+        _run_fetch_command(args)
         return
 
     # Make the settings match what we are about to bind, so everything that reads
@@ -195,6 +224,32 @@ async def _run_leases_command() -> None:
             )
     finally:
         await storage.close()
+
+
+def _run_fetch_command(args: argparse.Namespace) -> None:
+    """Install the Camoufox browser, which the app launches profiles with."""
+    from camoufox.exceptions import CamoufoxNotInstalled
+    from camoufox.pkgman import CamoufoxFetcher, installed_verstr, list_available_versions
+
+    if not args.force:
+        try:
+            print(f"Camoufox browser already installed: v{installed_verstr()}")
+            print("Pass --force to download a fresh copy anyway.")
+            return
+        except CamoufoxNotInstalled:
+            pass
+
+    builds = list_available_versions(include_prerelease=args.prerelease)
+    if not builds:
+        _fail("No Camoufox build is available for this platform.")
+
+    # Newest first, and stable-only unless --prerelease was passed: the
+    # prerelease builds are several times larger because they carry fonts.
+    target = builds[0]
+    size = f"{target.asset_size / 1_000_000:.0f} MB" if target.asset_size else "unknown size"
+    print(f"Downloading {target.display} ({size}). This runs once and takes a while.")
+    CamoufoxFetcher(selected_version=target).install(replace=args.force)
+    print(f"Camoufox browser v{installed_verstr()} installed.")
 
 
 async def _run_user_command(args: argparse.Namespace) -> None:

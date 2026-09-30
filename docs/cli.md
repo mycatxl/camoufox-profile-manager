@@ -82,10 +82,33 @@ want to wait out. Check `leases` first — force-releasing a lease that is still
 live lets a second browser open a profile that is already running, which is the
 corruption the lease prevents. There is deliberately no API endpoint for it.
 
+## `camoufox-pm fetch`
+
+Downloads the Camoufox browser without needing Camoufox's own command line. This
+is what the standalone desktop build has to use: that build carries the
+installer, but there is no `camoufox` executable beside it, and often no Python
+on the machine at all.
+
+```bash
+camoufox-pm fetch               # current stable build
+camoufox-pm fetch --prerelease  # newer fingerprints, several times the size
+camoufox-pm fetch --force       # download a fresh copy over an existing one
+```
+
+The browser is hundreds of megabytes, so the command announces what it is about
+to download and how big it is before it starts. Run against an existing install
+it does nothing until `--force` is passed.
+
+In the desktop build everything the app writes — the browser, the GeoIP
+databases, the addons, and `data/profiles.db` — stays inside the folder you
+unzipped, so deleting that folder is a complete uninstall.
+
 ## `camoufox fetch`
 
 Downloads the Camoufox browser (~300 MB). This comes from Camoufox itself, not
-from this project, and is required before any profile can be launched.
+from this project, and is required before any profile can be launched. Inside
+the standalone desktop build there is no `camoufox` command to run — use
+`camoufox-pm fetch` instead.
 
 ```bash
 camoufox fetch          # installed release

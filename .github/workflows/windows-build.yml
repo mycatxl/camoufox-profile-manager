@@ -136,13 +136,21 @@ jobs:
             | Commit | ${{ github.sha }} |
             | SHA256 | ${{ steps.package.outputs.sha256 }} |
 
-            **How to run it:** download `camoufox-pm-windows-x64.zip`, unzip the
-            whole archive, and start `camoufox-pm.exe` from inside the unzipped
-            folder — the executable needs the `_internal/` directory next to it.
+            **First run — three steps:**
+
+            1. Download `camoufox-pm-windows-x64.zip` and unzip the whole archive.
+               Keep the folder intact: `camoufox-pm.exe` needs the `_internal/`
+               directory beside it.
+            2. From inside that folder, download the browser once with
+               `camoufox-pm.exe fetch` (~470 MB — it is not bundled).
+            3. Start `camoufox-pm.exe`.
+
+            Everything the app writes stays inside the unzipped folder — the
+            browser, the GeoIP databases, the addons, and `data/profiles.db` — so
+            deleting that folder is a complete uninstall.
 
             The build is unsigned, so Windows SmartScreen asks once
-            ("More info" → "Run anyway"). The Camoufox browser itself is
-            downloaded on first run.
+            ("More info" → "Run anyway").
           files: rolling/*.zip
 
       - name: Attach to release

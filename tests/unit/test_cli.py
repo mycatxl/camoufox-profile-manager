@@ -8,6 +8,7 @@ browser is pointed at.
 
 import asyncio
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -190,3 +191,118 @@ def test_user_passwd_changes_the_password(run_user, tmp_path):
             await storage.close()
 
     assert asyncio.run(check())
+
+
+# --- `camoufox-pm fetch` ------------------------------------------------------
+
+
+def _stable_build(size: int = 470_000_000):
+    """The kind of build camoufox offers on its stable channel."""
+    from camoufox.pkgman import AvailableVersion, Version
+
+    return AvailableVersion(
+        version=Version(build="beta.31", version="152.0.4"),
+        url="https://example.invalid/camoufox-152.0.4-beta.31-win.x86_64.zip",
+        is_prerelease=False,
+        asset_size=size,
+    )
+
+
+@pytest.fixture
+def run_fetch(monkeypatch):
+    """Run ``fetch`` with camoufox's installer stood in for.
+
+    ``available`` is what camoufox reports as downloadable, ``already`` seeds an
+    existing install, and ``installed`` collects one entry per install attempt.
+    """
+    from camoufox import exceptions, pkgman
+
+    installed: list[tuple[object, bool]] = []
+    asked: list[bool] = []
+    available: list[object] = []
+    already: list[str] = []
+
+    class FakeFetcher:
+        def __init__(self, selected_version=None):
+            self.selected_version = selected_version
+
+        def install(self, replace: bool = False) -> None:
+            installed.append((self.selected_version, replace))
+            already.append("152.0.4-beta.31")
+
+    def fake_installed_verstr() -> str:
+        if already:
+            return already[-1]
+        raise exceptions.CamoufoxNotInstalled("camoufox is not installed")
+
+    def fake_list_available_versions(*, include_prerelease: bool = True, **_):
+        asked.append(include_prerelease)
+        return list(available)
+
+    monkeypatch.setattr(pkgman, "CamoufoxFetcher", FakeFetcher)
+    monkeypatch.setattr(pkgman, "installed_verstr", fake_installed_verstr)
+    monkeypatch.setattr(pkgman, "list_available_versions", fake_list_available_versions)
+    monkeypatch.setattr(cli.uvicorn, "run", lambda *a, **k: pytest.fail("must not serve"))
+
+    def invoke(*args: str) -> None:
+        monkeypatch.setattr(sys, "argv", ["camoufox-pm", "fetch", *args])
+        get_settings.cache_clear()
+        try:
+            cli.main()
+        finally:
+            get_settings.cache_clear()
+
+    return SimpleNamespace(
+        invoke=invoke, installed=installed, asked=asked, available=available, already=already
+    )
+
+
+def test_fetch_installs_the_newest_stable_build(run_fetch, capsys):
+    """A fresh install has no browser, and nothing can launch a profile without one."""
+    build = _stable_build()
+    run_fetch.available.append(build)
+
+    run_fetch.invoke()
+
+    assert run_fetch.installed == [(build, False)]
+    assert run_fetch.asked == [False], "stable is the default channel"
+    out = capsys.readouterr().out
+    assert "152.0.4-beta.31" in out
+    assert "470 MB" in out, "the size is the reason this is worth announcing"
+
+
+def test_fetch_leaves_an_existing_install_alone(run_fetch, capsys):
+    """Half a gigabyte: running fetch twice must not download it twice."""
+    run_fetch.already.append("152.0.4-beta.31")
+
+    run_fetch.invoke()
+
+    assert run_fetch.installed == []
+    assert "already installed" in capsys.readouterr().out
+
+
+def test_fetch_force_downloads_again(run_fetch):
+    build = _stable_build()
+    run_fetch.already.append("152.0.4-beta.31")
+    run_fetch.available.append(build)
+
+    run_fetch.invoke("--force")
+
+    assert run_fetch.installed == [(build, True)]
+
+
+def test_fetch_can_reach_a_prerelease_build(run_fetch):
+    """Newer fingerprints live behind the prerelease channel, at several times
+    the download — so it has to be asked for."""
+    run_fetch.available.append(_stable_build())
+
+    run_fetch.invoke("--prerelease")
+
+    assert run_fetch.asked == [True]
+
+
+def test_fetch_fails_clearly_when_nothing_is_available(run_fetch):
+    with pytest.raises(SystemExit):
+        run_fetch.invoke()
+
+    assert run_fetch.installed == []
