@@ -160,7 +160,10 @@ jobs:
 
             Everything the app writes stays inside the unzipped folder — the
             browser, the GeoIP databases, the addons, and `data/profiles.db` — so
-            deleting that folder is a complete uninstall.
+            deleting that folder is a complete uninstall. The only trace outside
+            it is the empty `%LOCALAPPDATA%\camoufox\camoufox\` directory: the
+            browser binary creates it for a startup lock file, then deletes the
+            lock again when it exits.
 
             The build is unsigned, so Windows SmartScreen asks once
             ("More info" → "Run anyway").
@@ -196,7 +199,10 @@ jobs:
 
             Everything the app writes stays inside the unzipped folder — the
             browser, the GeoIP databases, the addons, and `data/profiles.db` — so
-            deleting that folder is a complete uninstall.
+            deleting that folder is a complete uninstall. The only trace outside
+            it is the empty `%LOCALAPPDATA%\camoufox\camoufox\` directory: the
+            browser binary creates it for a startup lock file, then deletes the
+            lock again when it exits.
 
             The build is unsigned, so Windows SmartScreen asks once
             ("More info" → "Run anyway").

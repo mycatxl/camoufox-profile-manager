@@ -101,15 +101,18 @@ it does nothing until `--force` is passed.
 
 In the desktop build everything the app writes — the browser, the GeoIP
 databases, the addons, and `data/profiles.db` — stays inside the folder you
-unzipped, so deleting that folder is a complete uninstall. That build ships with
-a browser already, so `fetch` is only how you replace it with a newer one.
+unzipped, so deleting that folder is a complete uninstall. The only trace
+outside it is the empty `%LOCALAPPDATA%\camoufox\camoufox\` directory: the
+browser binary creates it for a startup lock file, then deletes the lock again
+when it exits. That build ships with a browser already, so `fetch` is only how
+you replace it with a newer one.
 
 ## `camoufox fetch`
 
-Downloads the Camoufox browser (~300 MB). This comes from Camoufox itself, not
-from this project, and is required before any profile can be launched. Inside
-the standalone desktop build there is no `camoufox` command to run — use
-`camoufox-pm fetch` instead.
+Downloads the Camoufox browser. This comes from Camoufox itself, not from this
+project. A source checkout needs it before any profile can be launched; the
+standalone desktop build ships with one already, and has no `camoufox` command
+of its own — `camoufox-pm fetch` is how the bundled browser gets updated.
 
 ```bash
 camoufox fetch          # installed release
