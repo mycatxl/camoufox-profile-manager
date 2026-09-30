@@ -1,0 +1,85 @@
+/*
+ * Daylight palette — the one local change to the incumbent look.
+ *
+ * Upstream's world is a dark instrument panel: near-black canvas, hairlines
+ * instead of boxes, one signal colour (orange) for the primary action and the
+ * running state. This file keeps every one of those relationships and swaps the
+ * values, so the same components read on a light surface: panels a shade lighter
+ * than the page, hairlines a shade darker than both, and the same signal hue —
+ * deepened, because the orange that reads on near-black measures 2.9:1 on white
+ * and would fail everywhere it is used as text.
+ *
+ * Rules here are deliberately unlayered. Tailwind puts its utilities in
+ * `@layer utilities`, and an unlayered rule outranks every layer, so these win
+ * against upstream's utilities and component classes without `!important` and
+ * without depending on source order.
+ *
+ * Imported at the top of globals.css. Keeping it in its own file is the point:
+ * a merge from upstream can only ever collide on that one import line.
+ */
+
+:root:root {
+  /* Tells the browser to draw form controls, scrollbars and the caret for a
+     light page instead of inheriting the OS's dark-mode rendering. */
+  color-scheme: light;
+
+  --color-canvas: #f2f4f7;
+  --color-surface: #ffffff;
+  --color-raised: #eef1f5;
+  --color-line: #dfe3e8;
+  --color-line-strong: #c9d0d8;
+
+  --color-ink: #14161a;
+  --color-ink-dim: #565c68;
+  --color-ink-faint: #67707c;
+
+  --color-signal: #c2410c;
+  --color-signal-soft: #a9360a;
+  --color-signal-shade: #ffdcc9;
+
+  --color-danger: #c0262c;
+  --color-danger-shade: #fbe9ea;
+
+  --color-warn: #9a6700;
+  --color-ok: #1a7f37;
+}
+
+/* The primary button carried near-black text because its fill was light orange.
+   A fill that also passes as text on white has to be darker, so the label flips
+   to white — 5.2:1 on the fill against 3.5:1 for the old pairing. */
+.btn-primary {
+  color: #fff;
+}
+
+/* Upstream picks its shadow colours inline (shadow-black/40-60), which on a
+   light canvas are black halos rather than a lifted edge. The three floating
+   surfaces — the dialog, the toast and the row menu — get a soft grey instead. */
+.dialog-in,
+.shadow-xl.shadow-black\/50 {
+  --tw-shadow-color: rgb(16 19 26 / 0.16);
+}
+
+/* A 70% black scrim was measured against a near-black page. Over a light one it
+   is a blackout rather than a dimming, so it drops to a wash that still pushes
+   the page back far enough to hold attention. */
+.overlay-in {
+  background-color: rgb(17 20 26 / 0.38);
+}
+
+/* Same chevron, drawn in ink that shows on a white field. */
+select.field {
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2367707c' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+
+/* Two places upstream spends contrast on opacity, measured against a near-black
+   page. On a light one the same fade is worse than it was in the dark, so both
+   keep the step-down that is already built into the palette and drop the
+   extra transparency: the dim ink is a step below body text, and the hairline
+   is already the quietest rule here. */
+.text-ink-dim\/70 {
+  color: var(--color-ink-dim);
+}
+
+.border-line\/60 {
+  border-color: var(--color-line);
+}
