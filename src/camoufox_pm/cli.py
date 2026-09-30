@@ -226,6 +226,20 @@ async def _run_leases_command() -> None:
         await storage.close()
 
 
+def _rate_limit_hint(exc: BaseException) -> str:
+    """Explain the one failure worth explaining: GitHub's anonymous API quota.
+
+    Sixty calls an hour per address is easy to exhaust on a shared connection,
+    and the message the API returns does not say what to do about it.
+    """
+    if "rate limit" not in str(exc).lower():
+        return ""
+    return (
+        "\nGitHub allows 60 anonymous API calls an hour per address. Setting "
+        "GITHUB_TOKEN to a personal access token raises that to 5,000."
+    )
+
+
 def _run_fetch_command(args: argparse.Namespace) -> None:
     """Install the Camoufox browser, which the app launches profiles with."""
     from camoufox.exceptions import CamoufoxNotInstalled
@@ -239,7 +253,11 @@ def _run_fetch_command(args: argparse.Namespace) -> None:
         except CamoufoxNotInstalled:
             pass
 
-    builds = list_available_versions(include_prerelease=args.prerelease)
+    try:
+        builds = list_available_versions(include_prerelease=args.prerelease)
+    except Exception as exc:  # noqa: BLE001 - a failed lookup deserves a sentence
+        _fail(f"Could not list the available Camoufox builds: {exc}{_rate_limit_hint(exc)}")
+
     if not builds:
         _fail("No Camoufox build is available for this platform.")
 
@@ -248,7 +266,12 @@ def _run_fetch_command(args: argparse.Namespace) -> None:
     target = builds[0]
     size = f"{target.asset_size / 1_000_000:.0f} MB" if target.asset_size else "unknown size"
     print(f"Downloading {target.display} ({size}). This runs once and takes a while.")
-    CamoufoxFetcher(selected_version=target).install(replace=args.force)
+
+    try:
+        CamoufoxFetcher(selected_version=target).install(replace=args.force)
+    except Exception as exc:  # noqa: BLE001 - the reason, not a traceback
+        _fail(f"Installing {target.display} failed: {exc}{_rate_limit_hint(exc)}")
+
     print(f"Camoufox browser v{installed_verstr()} installed.")
 
 

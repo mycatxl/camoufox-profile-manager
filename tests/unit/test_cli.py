@@ -253,7 +253,12 @@ def run_fetch(monkeypatch):
             get_settings.cache_clear()
 
     return SimpleNamespace(
-        invoke=invoke, installed=installed, asked=asked, available=available, already=already
+        invoke=invoke,
+        installed=installed,
+        asked=asked,
+        available=available,
+        already=already,
+        pkgman=pkgman,
     )
 
 
@@ -306,3 +311,35 @@ def test_fetch_fails_clearly_when_nothing_is_available(run_fetch):
         run_fetch.invoke()
 
     assert run_fetch.installed == []
+
+
+def test_fetch_explains_a_github_rate_limit(run_fetch, monkeypatch, capsys):
+    """Sixty anonymous API calls an hour per address is easy to exhaust on a
+    shared connection, and what GitHub returns does not say what to do about it."""
+
+    def rate_limited(**_):
+        raise RuntimeError("403 Client Error: rate limit exceeded for url: https://x")
+
+    monkeypatch.setattr(run_fetch.pkgman, "list_available_versions", rate_limited)
+
+    with pytest.raises(SystemExit):
+        run_fetch.invoke()
+
+    assert run_fetch.installed == []
+    assert "GITHUB_TOKEN" in capsys.readouterr().err
+
+
+def test_fetch_does_not_blame_github_for_every_failure(run_fetch, monkeypatch, capsys):
+    """A network that is simply down is not a rate limit; the hint would be noise."""
+
+    def offline(**_):
+        raise RuntimeError("getaddrinfo failed")
+
+    monkeypatch.setattr(run_fetch.pkgman, "list_available_versions", offline)
+
+    with pytest.raises(SystemExit):
+        run_fetch.invoke()
+
+    err = capsys.readouterr().err
+    assert "getaddrinfo failed" in err
+    assert "GITHUB_TOKEN" not in err
