@@ -1,7 +1,13 @@
 name: Windows build
 
 # Auto-builds the standalone Windows desktop app so the newest state of `main`
-# always has a downloadable zip in the Actions tab.
+# always has a downloadable zip.
+#
+# Every push to main produces two things:
+#   1. an Actions artifact named with the version + commit — traceability, kept
+#      90 days;
+#   2. the rolling release `latest-win`, whose single asset keeps a *stable*
+#      filename, so its download URL never changes.
 #
 # Windows only on purpose: `desktop.yml` keeps the manual, cross-platform builds
 # (macOS/Windows/Linux). PyInstaller does not cross-compile, so the Windows
@@ -24,8 +30,8 @@ concurrency:
   group: windows-build-${{ github.ref }}
   cancel-in-progress: true
 
-# `contents: write` is only needed by the optional "attach to release" step.
-# Checkout and the artifact upload work with the default read token.
+# Needed to create/update releases and their git tags. Checkout and the artifact
+# upload work with the default read token.
 permissions:
   contents: write
 
@@ -66,6 +72,7 @@ jobs:
         run: uv run python scripts/build_desktop.py
 
       - name: Package
+        id: package
         shell: pwsh
         run: |
           $version = "${{ steps.version.outputs.value }}"
@@ -78,6 +85,9 @@ jobs:
           $hash = (Get-FileHash $zip -Algorithm SHA256).Hash
           $mb = [math]::Round((Get-Item $zip).Length / 1MB, 1)
           Write-Host "Packaged $zip ($mb MB, sha256 $hash)"
+
+          "zip=$zip" >> $env:GITHUB_OUTPUT
+          "sha256=$hash" >> $env:GITHUB_OUTPUT
 
           @(
             "## Windows desktop build $version",
@@ -97,6 +107,43 @@ jobs:
           name: camoufox-pm-${{ steps.version.outputs.value }}-windows-x64-${{ github.sha }}
           path: dist/*.zip
           if-no-files-found: error
+
+      # The rolling release carries a stable filename, so its URL is fixed. The
+      # version-stamped copy above stays as the artifact.
+      - name: Stage the rolling asset
+        if: github.event_name == 'push'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path rolling | Out-Null
+          Copy-Item "${{ steps.package.outputs.zip }}" rolling/camoufox-pm-windows-x64.zip
+
+      - name: Update the rolling release
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: latest-win
+          name: Latest Windows build (rolling)
+          # Keep the "Latest" badge on the versioned releases; this one is a
+          # moving target, not a published version.
+          make_latest: false
+          body: |
+            Rolling build of the newest `main`. The asset below is overwritten on
+            every push, and its filename never changes — so this link is stable.
+
+            | | |
+            |---|---|
+            | Version | ${{ steps.version.outputs.value }} |
+            | Commit | ${{ github.sha }} |
+            | SHA256 | ${{ steps.package.outputs.sha256 }} |
+
+            **How to run it:** download `camoufox-pm-windows-x64.zip`, unzip the
+            whole archive, and start `camoufox-pm.exe` from inside the unzipped
+            folder — the executable needs the `_internal/` directory next to it.
+
+            The build is unsigned, so Windows SmartScreen asks once
+            ("More info" → "Run anyway"). The Camoufox browser itself is
+            downloaded on first run.
+          files: rolling/*.zip
 
       - name: Attach to release
         if: ${{ inputs.release_tag != '' }}
