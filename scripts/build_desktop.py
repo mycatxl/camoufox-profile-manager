@@ -3,7 +3,8 @@
 
 Builds the web UI into the package, then runs PyInstaller against
 ``packaging/camoufox-pm.spec``. On macOS this also produces a ``.app`` bundle.
-The Camoufox browser binary is not bundled — it is fetched at first run.
+The Camoufox browser, the GeoIP databases and the addons are not bundled here;
+the Windows build installs them into the package directory afterwards.
 
     python scripts/build_desktop.py
 """

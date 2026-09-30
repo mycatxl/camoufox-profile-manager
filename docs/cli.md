@@ -110,6 +110,12 @@ The browser binary keeps one directory of its own,
 `SkeletonUILock-*` there and deletes it again on exit. A leftover from a crash is
 cleared at the next start.
 
+The Windows build is windowed, so no terminal window opens next to it. Output
+goes to the console it was started from when there is one — run
+`camoufox-pm.exe fetch` in a terminal and the progress prints there — and
+otherwise to `logs\camoufox-pm.log` beside the executable, which is also where a
+start that fails says why.
+
 ## `camoufox fetch`
 
 Downloads the Camoufox browser. This comes from Camoufox itself, not from this

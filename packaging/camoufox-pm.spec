@@ -4,8 +4,10 @@
 #   pyinstaller packaging/camoufox-pm.spec --noconfirm --clean
 #
 # Produces dist/camoufox-pm/ (a standalone bundle) and, on macOS, a .app.
-# The Camoufox browser binary is NOT bundled — it is fetched at first run.
+# The browser, the GeoIP databases and the addons are not part of this bundle;
+# the Windows build installs them into the package directory afterwards.
 import os
+import sys
 
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 
@@ -45,11 +47,14 @@ exe = EXE(
     [],
     exclude_binaries=True,
     name="camoufox-pm",
-    # Deliberate: the same binary is also the CLI (`camoufox-pm --port ...`), and
-    # a windowed build on Windows has no stdout, which loses the server log and
-    # can break writes to it. The cost is a console window next to the desktop
-    # app on Windows; revisit if the desktop build is ever split from the CLI.
-    console=True,
+    # No console window: this is the desktop app, and a black terminal sitting
+    # next to it is the first thing anyone asks about. The price is that a frozen
+    # build has no stdout or stderr, which launch.py pays back by attaching to the
+    # console it was started from (so `camoufox-pm fetch` still prints there) and
+    # writing logs/camoufox-pm.log instead when it was double-clicked.
+    # Left alone elsewhere: on macOS this only changes whether the bundle opens a
+    # Terminal window, and nothing has been verified against that.
+    console=sys.platform != "win32",
 )
 coll = COLLECT(
     exe,

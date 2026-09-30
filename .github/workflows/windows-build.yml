@@ -91,6 +91,15 @@ jobs:
           $exe = "dist/camoufox-pm/camoufox-pm.exe"
           if (-not (Test-Path $exe)) { throw "PyInstaller produced no $exe" }
 
+          # The build is windowed so double-clicking does not open a terminal.
+          # PE subsystem 2 is GUI, 3 is console — worth asserting because the
+          # difference is invisible to every other check here and only shows up
+          # when a person runs the thing.
+          $pe = [System.IO.File]::ReadAllBytes($exe)
+          $subsystem = [System.BitConverter]::ToUInt16($pe, [System.BitConverter]::ToInt32($pe, 0x3C) + 0x5C)
+          if ($subsystem -ne 2) { throw "$exe has PE subsystem $subsystem; expected 2 (GUI, no console window)" }
+          Write-Host "Verified: $exe is a GUI binary, so no console window appears"
+
           $zip = "dist/camoufox-pm-$version-windows-x64.zip"
           Compress-Archive -Path "dist/camoufox-pm/*" -DestinationPath $zip -Force
 
