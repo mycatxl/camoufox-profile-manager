@@ -75,13 +75,23 @@ jobs:
       # the default addons into the package's own cache directory — the one
       # launch.py points at — so the folder ships complete and the first launch
       # needs no network at all.
+      #
+      # Both commands are checked on their own: a multi-line `run:` block reports
+      # the exit code of its last command only, which is how a failed fetch once
+      # shipped a 111 MB package whose release notes promised a browser.
+      # GITHUB_TOKEN is what that fetch needs — listing the available builds goes
+      # through the GitHub API, runners share an address, and the anonymous limit
+      # (60 calls an hour) is easily spent by whatever ran on that machine first.
       - name: Install the browser and its data into the package
         shell: pwsh
         env:
           WIN_PD_OVERRIDE_LOCAL_APPDATA: ${{ github.workspace }}\dist\camoufox-pm\portable
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           uv run camoufox-pm fetch
+          if ($LASTEXITCODE -ne 0) { throw "camoufox-pm fetch failed with exit code $LASTEXITCODE" }
           uv run python packaging/prefetch_data.py
+          if ($LASTEXITCODE -ne 0) { throw "packaging/prefetch_data.py failed with exit code $LASTEXITCODE" }
 
       - name: Package
         id: package
@@ -101,6 +111,20 @@ jobs:
           Write-Host "Verified: $exe is a GUI binary, so no console window appears"
 
           $zip = "dist/camoufox-pm-$version-windows-x64.zip"
+          # The package promises to be "unzip and run", so the parts that make
+          # that true are asserted rather than assumed: the browser profiles are
+          # launched with, the GeoIP databases a timezone is pinned from, and the
+          # addon. Downloading them can silently do nothing — see the exit-code
+          # note above — and the result is only visible to whoever unzips it.
+          $bundle = "dist/camoufox-pm/portable/camoufox/camoufox/Cache"
+          $browser = @(Get-ChildItem "$bundle/browsers" -Recurse -Filter camoufox.exe -ErrorAction SilentlyContinue)
+          $geoip = @(Get-ChildItem "$bundle/geoip" -Recurse -Filter "*.mmdb" -ErrorAction SilentlyContinue)
+          $addons = @(Get-ChildItem "$bundle/addons" -Recurse -File -ErrorAction SilentlyContinue)
+          if ($browser.Count -lt 1) { throw "the package has no browser in it: nothing to launch profiles with" }
+          if ($geoip.Count -lt 2) { throw "expected the GeoLite2 ipv4 and ipv6 databases, found $($geoip.Count)" }
+          if ($addons.Count -lt 100) { throw "expected the default addons, found $($addons.Count) files" }
+          Write-Host "Verified: bundled browser, $($geoip.Count) GeoIP databases, $($addons.Count) addon files"
+
           Compress-Archive -Path "dist/camoufox-pm/*" -DestinationPath $zip -Force
 
           $hash = (Get-FileHash $zip -Algorithm SHA256).Hash
