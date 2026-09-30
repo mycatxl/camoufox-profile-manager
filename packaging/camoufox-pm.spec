@@ -46,12 +46,12 @@ exe = EXE(
     [],
     exclude_binaries=True,
     name="camoufox-pm",
-    # Deliberate: the same binary is also the CLI, and on Windows this console is
-    # the only visible handle on a running server — closing it stops the app. A
-    # windowed build has no stdout or stderr at all, and then closing the web UI or
-    # its browser tab leaves the process running with nothing left to close, which
-    # is worse than a black window. launch.py still keeps _redirect_output for a
-    # build without a console; nothing uses it today.
+    # Deliberate: the same binary is also the CLI (`camoufox-pm --port ...`), and a
+    # windowed build on Windows has no stdout, which loses the server log and can
+    # break writes to it — and leaves no visible handle on a running server, so
+    # closing the web UI or its browser tab would strand the process. The cost is a
+    # console window next to the desktop app on Windows; revisit if the desktop
+    # build is ever split from the CLI.
     console=True,
 )
 coll = COLLECT(

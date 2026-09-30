@@ -1,7 +1,4 @@
 @import "tailwindcss";
-/* Daylight palette. Kept in its own file so that a merge from upstream can only
-   ever collide on this line; see theme-light.css for why it has to exist. */
-@import "./theme-light.css";
 
 /*
  * Camoufox Profile Manager — "instrument panel".

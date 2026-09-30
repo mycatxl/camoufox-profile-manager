@@ -8,95 +8,13 @@ changes none of that; :func:`_anchor` only acts inside a bundle.
 
 The browser binary keeps one directory of its own outside the folder, which no
 Python-level switch can move; :func:`_clear_browser_leftovers` clears it.
-
-The Windows build keeps its console: on Windows that window is the only visible
-handle on a running server, so closing it is how the app is stopped. A build
-without one has no stdout or stderr at all, which is what _redirect_output
-covers — it attaches to the console it was started from, or writes
-``logs/camoufox-pm.log`` beside the executable.
 """
 
-import io
 import os
 import sys
-from datetime import datetime
 from pathlib import Path
 
 PORTABLE_CACHE_DIRNAME = "portable"
-
-# A build without a console has no stdout or stderr at all, so _redirect_output
-# gives the process one of two places to write: the console it was started from,
-# or this file inside the package folder. Dormant while a stream exists.
-LOG_DIRNAME = "logs"
-LOG_FILENAME = "camoufox-pm.log"
-LOG_ROTATE_BYTES = 5 * 1024 * 1024
-
-_ATTACH_PARENT_PROCESS = 0xFFFFFFFF
-
-
-def _attach_parent_console() -> bool:
-    """Borrow the console of the process that started us, if there is one.
-
-    A build without a console is not attached to any console, so `camoufox-pm
-    fetch` run from a terminal would print nothing at all. Attaching puts that
-    output back. False means there was no console to borrow — a double-click —
-    and the caller falls back to a log file.
-    """
-    if sys.platform != "win32":
-        return False
-    try:
-        import ctypes
-
-        if not ctypes.windll.kernel32.AttachConsole(_ATTACH_PARENT_PROCESS):
-            return False
-        sys.stdout = open("CONOUT$", "w", encoding="utf-8", buffering=1)
-        sys.stderr = open("CONOUT$", "w", encoding="utf-8", buffering=1)
-        if sys.stdin is None:
-            try:
-                sys.stdin = open("CONIN$", encoding="utf-8")
-            except OSError:
-                # Only the interactive prompts need it, and they can fail loudly.
-                pass
-        return True
-    except (AttributeError, OSError):
-        return False
-
-
-def _open_log(path: Path) -> io.TextIOWrapper:
-    """Open the log for appending, moving one previous file out of the way.
-
-    The server logs a line per request, so this would grow without bound over the
-    life of an install.
-    """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if path.exists() and path.stat().st_size > LOG_ROTATE_BYTES:
-        previous = path.with_suffix(path.suffix + ".1")
-        previous.unlink(missing_ok=True)
-        path.rename(previous)
-    handle = path.open("a", encoding="utf-8", buffering=1)
-    handle.write(
-        f"\n--- {datetime.now().isoformat(timespec='seconds')} "
-        f"{sys.executable} (python {sys.version.split()[0]}) ---\n"
-    )
-    return handle
-
-
-def _redirect_output(root: Path) -> Path | None:
-    """Point stdout and stderr somewhere, for a build that has neither.
-
-    Returns the log path when a file was opened, or None when the process already
-    had a stream — a console build, or a source checkout.
-    """
-    if sys.stdout is not None and sys.stderr is not None:
-        return None
-    if _attach_parent_console():
-        return None
-
-    handle = _open_log(root / LOG_DIRNAME / LOG_FILENAME)
-    sys.stdout = handle
-    sys.stderr = handle
-    return root / LOG_DIRNAME / LOG_FILENAME
-
 
 # Firefox's pre-XUL skeleton UI is compiled into the browser's mozglue.dll and
 # writes its lock file to "%LOCALAPPDATA%\<vendor>\<name>" using the names baked
@@ -168,11 +86,6 @@ def _anchor() -> None:
     # CSIDL_LOCAL_APPDATA, and every one of those paths goes through it.
     # setdefault, so an override the user set deliberately still wins.
     os.environ.setdefault("WIN_PD_OVERRIDE_LOCAL_APPDATA", str(root / PORTABLE_CACHE_DIRNAME))
-
-    # A build without a console has nowhere to write, and loguru's default handler
-    # needs a stream before anything logs. Windows ships with a console, so this is
-    # a no-op there today; it is what keeps a windowed build diagnosable.
-    _redirect_output(root)
 
     # The browser binary has one directory of its own that no environment
     # variable reaches, so sweep that one instead.
